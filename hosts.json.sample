@@ -1,10 +1,12 @@
 [
     {
         "host": "127.0.0.1",
-        "password": "password1"
+        "password": "password1",
+        "username": "root"
     },
     {
         "host": "127.0.0.1",
-        "password": "password2"
+        "password": "password2",
+        "username": "root"
     }
 ]

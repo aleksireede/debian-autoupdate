@@ -6,14 +6,15 @@ source config.env
 # Configuration
 CONFIG_FILE="hosts.json"
 SSH_KEYS_DIR="ssh_keys"
-LOG_FILE="setup_ssh_keys_log_$(date +%Y%m%d%H%M%S).log"
+LOG_FILE="./logs/setup_ssh_keys_log_$(date +%Y%m%d%H%M%S).log"
 
 mkdir -p "$SSH_KEYS_DIR"
 
 # Generate a private/public key pair per host locally if missing
 generate_ssh_key_local() {
     local host=$1
-    local priv_key="$SSH_KEYS_DIR/$host"
+    local key_name=$2
+    local priv_key="$SSH_KEYS_DIR/$key_name"
     local pub_key="$priv_key.pub"
 
     if [ ! -f "$priv_key" ]; then
@@ -29,11 +30,13 @@ generate_ssh_key_local() {
 copy_public_key_to_host() {
     local host=$1
     local password=$2
-    local pub_key_file="$SSH_KEYS_DIR/$host.pub"
+    local username=$3
+    local key_name=$4
+    local pub_key_file="$SSH_KEYS_DIR/$key_name.pub"
 
     echo "Copying public key to $host..." | tee -a "$LOG_FILE"
 
-    sshpass -p "$password" ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$host" bash -c "'
+    sshpass -p "$password" ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=10 $username@"$host" bash -c "'
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
         echo \"$(cat "$pub_key_file")\" >> ~/.ssh/authorized_keys
@@ -53,7 +56,9 @@ copy_public_key_to_host() {
 count=0
 while read -r host_config; do
     host=$(jq -r '.host' <<< "$host_config")
+    username=$(jq -r '.username' <<< "$host_config")
     password=$(jq -r '.password' <<< "$host_config")
+    key_name=$(jq -r '.key_name' <<< "$host_config")
 
     echo "Processing host $host..." | tee -a "$LOG_FILE"
     if [ -z "$host" ] || [ -z "$password" ]; then
@@ -61,8 +66,8 @@ while read -r host_config; do
         continue
     fi
 
-    generate_ssh_key_local "$host"
-    if copy_public_key_to_host "$host" "$password"; then
+    generate_ssh_key_local "$host" "$key_name"
+    if copy_public_key_to_host "$host" "$password" "$username" "$key_name"; then
         ((count++))
     else
         echo "Error during public key setup on $host" | tee -a "$LOG_FILE"
